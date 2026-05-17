@@ -51,8 +51,21 @@ class UserClick(Base):
             return self.last_name
         return "Unknown"
 
-# Database engine and session setup
-engine = create_engine(DATABASE_URL)
+# Database engine and session setup with connection pooling
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=10,  # Number of connections to keep open
+    max_overflow=20,  # Additional connections that can be created
+    pool_pre_ping=True,  # Test connections before using them
+    pool_recycle=3600,  # Recycle connections after 1 hour
+    connect_args={
+        'connect_timeout': 10,
+        'keepalives': 1,
+        'keepalives_idle': 30,
+        'keepalives_interval': 10,
+        'keepalives_count': 5
+    }
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def create_db_and_tables():

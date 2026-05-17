@@ -1,13 +1,45 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, desc
+from sqlalchemy.exc import OperationalError, DBAPIError
 from .models import Video, AdminSetting, UserClick, SessionLocal
 from typing import Optional, List, Dict
 from datetime import datetime
+import time
+import logging
+
+logger = logging.getLogger(__name__)
+
+def retry_on_db_error(max_retries=3, delay=1):
+    """Decorator to retry database operations on connection errors"""
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except (OperationalError, DBAPIError) as e:
+                    last_exception = e
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Database error in {func.__name__}, attempt {attempt + 1}/{max_retries}: {str(e)}")
+                        time.sleep(delay * (attempt + 1))  # Exponential backoff
+                        # Try to rollback the session if it exists in args
+                        for arg in args:
+                            if isinstance(arg, Session):
+                                try:
+                                    arg.rollback()
+                                except:
+                                    pass
+                    else:
+                        logger.error(f"Database error in {func.__name__} after {max_retries} attempts: {str(e)}")
+            raise last_exception
+        return wrapper
+    return decorator
 
 def get_db_session():
     """Get a new database session"""
     return SessionLocal()
 
+@retry_on_db_error(max_retries=3, delay=1)
 def add_video(session: Session, message_id: int,ch_id:int, title: str,random_id:str, is_vip: bool = False) -> Video:
     """Add a new video to database"""
     video = Video(
@@ -24,6 +56,7 @@ def add_video(session: Session, message_id: int,ch_id:int, title: str,random_id:
     session.refresh(video)
     return video
 
+@retry_on_db_error(max_retries=3, delay=1)
 def get_unposted_videos(session: Session, limit: int = 1) -> List[Video]:
     """Get unposted videos ordered by creation time"""
     return session.query(Video)\
@@ -32,6 +65,7 @@ def get_unposted_videos(session: Session, limit: int = 1) -> List[Video]:
         .limit(limit)\
         .all()
 
+@retry_on_db_error(max_retries=3, delay=1)
 def mark_video_posted(session: Session, video_id: int):
     """Mark video as posted with current timestamp"""
     video = session.get(Video, video_id)
@@ -40,6 +74,7 @@ def mark_video_posted(session: Session, video_id: int):
         video.post_date = datetime.now()
         session.commit()
 
+@retry_on_db_error(max_retries=3, delay=1)
 def increment_click_count(session: Session, random_id: str):
     """Increment video's click count"""
     video = session.query(Video).filter_by(random_id=random_id).first()
@@ -62,6 +97,7 @@ def set_admin_setting(session: Session, key: str, value: str):
     session.commit()
 
 
+@retry_on_db_error(max_retries=3, delay=1)
 def record_user_click(session: Session, user_id: int, username: Optional[str], 
                       first_name: Optional[str], last_name: Optional[str], 
                       video_random_id: str) -> UserClick:
@@ -78,6 +114,7 @@ def record_user_click(session: Session, user_id: int, username: Optional[str],
     session.refresh(user_click)
     return user_click
 
+@retry_on_db_error(max_retries=3, delay=1)
 def get_leaderboard(session: Session, limit: int = 10) -> List[Dict]:
     """Get top users by click count with their details"""
     # Query untuk menghitung total klik per user
@@ -119,6 +156,7 @@ def get_leaderboard(session: Session, limit: int = 10) -> List[Dict]:
     
     return result
 
+@retry_on_db_error(max_retries=3, delay=1)
 def get_user_stats(session: Session, user_id: int) -> Optional[Dict]:
     """Get statistics for a specific user"""
     total_clicks = session.query(func.count(UserClick.id))\
