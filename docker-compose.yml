@@ -14,7 +14,7 @@ services:
       - ./database:/app/database
       - ./temp:/app/temp
       - ./assets:/app/assets
-      - ./bot.log:/app/bot.log
+      # Log file removed - use 'docker logs' to view logs
     networks:
       - bot_network
     logging:
