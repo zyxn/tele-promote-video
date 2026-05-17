@@ -1,0 +1,77 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+venv/
+env/
+ENV/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Telegram session files
+*.session
+*.session-journal
+viral_bot.session
+viral_bot.session-journal
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+database/*.session
+database/*.session-journal
+
+# Logs
+*.log
+bot.log
+admin_handlers.log
+database/admin_handlers.log
+
+# Temporary files
+temp/*
+!temp/.gitkeep
+
+# Media files (optional - uncomment if you don't want to track generated images)
+# temp/*.png
+# temp/*.jpg
+# temp/*.jpeg
+# assets/clickbait/*.PNG
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+*.bak
+*~
+
+# Docker
+.dockerignore
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json

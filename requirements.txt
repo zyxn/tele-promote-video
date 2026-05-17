@@ -1,0 +1,6 @@
+telethon
+apscheduler
+psycopg2-binary
+sqlalchemy
+requests
+python-dotenv

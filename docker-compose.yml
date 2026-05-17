@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: viral_telegram_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Persist session files
+      - ./database:/app/database
+      - ./temp:/app/temp
+      - ./assets:/app/assets
+      - ./bot.log:/app/bot.log
+    networks:
+      - bot_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+networks:
+  bot_network:
+    driver: bridge
