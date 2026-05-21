@@ -9,6 +9,53 @@ from database.models import Video
 
 logger = logging.getLogger(__name__)
 
+async def send_video_to_user(client, event, video_id, is_callback=False):
+    with crud.get_db_session() as session:
+        video = session.query(Video).filter_by(random_id=video_id).first()
+        logger.info(f"Video found in database: {video is not None}")
+        
+        if video:
+            logger.info(f"Video details - ID: {video.id}, Title: {video.title}, Message ID: {video.message_id}")
+            
+            logger.info(f"Attempting to forward message {video.message_id} from channel {config.CHANNELS['PRIVATE']}")
+            try:
+                forwarded = await client.forward_messages(
+                    entity=event.sender_id,
+                    messages=video.message_id,
+                    from_peer=config.CHANNELS['PRIVATE'],
+                    drop_author=True
+                )
+                logger.info(f"[SUCCESS] Video forwarded successfully! Message ID: {forwarded.id if forwarded else 'None'}")
+                
+                crud.increment_click_count(session, video_id)
+                logger.info(f"Click count incremented for video {video_id}")
+                
+                user = await event.get_sender()
+                crud.record_user_click(
+                    session=session,
+                    user_id=event.sender_id,
+                    username=user.username,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
+                    video_random_id=video_id
+                )
+                logger.info(f"User click recorded for user {event.sender_id} ({user.first_name})")
+                
+                if is_callback:
+                    await event.delete()
+                return True
+                
+            except Exception as forward_error:
+                logger.error(f"[ERROR] Error forwarding video: {str(forward_error)}", exc_info=True)
+                if is_callback:
+                    await event.edit("❌ Maaf, terjadi kesalahan saat mengirim video. Silakan coba lagi nanti.")
+                else:
+                    await event.reply("❌ Maaf, terjadi kesalahan saat mengirim video. Silakan coba lagi nanti.")
+                return True
+        else:
+            logger.warning(f"Video with random_id {video_id} not found in database")
+            return False
+
 async def setup_user_handlers(client):
     @client.on(events.NewMessage(pattern='/start'))
     async def start_handler(event):
@@ -18,6 +65,11 @@ async def setup_user_handlers(client):
             logger.info(f"Message text: {event.message.text}")
             logger.info(f"Chat ID: {event.chat_id}")
             
+            # Proses parameter start early
+            args = event.message.text.split()
+            logger.info(f"Command args: {args}")
+            video_id = args[1] if len(args) > 1 else None
+            
             # Cek subscription
             logger.info("Checking user subscriptions...")
             missing = await verification.check_user_subscriptions(client, event.sender_id)
@@ -25,61 +77,16 @@ async def setup_user_handlers(client):
             
             if missing:
                 logger.info("User has missing subscriptions, sending subscription request")
-                await verification.send_subscription_request(event, missing)
+                await verification.send_subscription_request(event, missing, video_id)
                 return
 
             logger.info("User has all required subscriptions")
             
-            # Proses parameter start
-            args = event.message.text.split()
-            logger.info(f"Command args: {args}")
-            
-            if len(args) > 1:
-                video_id = args[1]
+            if video_id:
                 logger.info(f"Video ID from link: {video_id}")
-                
-                with crud.get_db_session() as session:
-                    video = session.query(Video).filter_by(random_id=video_id).first()
-                    logger.info(f"Video found in database: {video is not None}")
-                    
-                    if video:
-                        logger.info(f"Video details - ID: {video.id}, Title: {video.title}, Message ID: {video.message_id}, Channel ID: {video.ch_id}")
-                        
-                        # Forward video ke user
-                        logger.info(f"Attempting to forward message {video.message_id} from channel {config.CHANNELS['PRIVATE']}")
-                        
-                        try:
-                            forwarded = await client.forward_messages(
-                                entity=event.sender_id,
-                                messages=video.message_id,
-                                from_peer=config.CHANNELS['PRIVATE'],
-                                drop_author=True
-                            )
-                            logger.info(f"[SUCCESS] Video forwarded successfully! Forwarded message ID: {forwarded.id if forwarded else 'None'}")
-                            
-                            # Increment click count
-                            crud.increment_click_count(session, video_id)
-                            logger.info(f"Click count incremented for video {video_id}")
-                            
-                            # Record user click dengan data lengkap
-                            user = await event.get_sender()
-                            crud.record_user_click(
-                                session=session,
-                                user_id=event.sender_id,
-                                username=user.username,
-                                first_name=user.first_name,
-                                last_name=user.last_name,
-                                video_random_id=video_id
-                            )
-                            logger.info(f"User click recorded for user {event.sender_id} ({user.first_name})")
-                            return
-                            
-                        except Exception as forward_error:
-                            logger.error(f"[ERROR] Error forwarding video: {str(forward_error)}", exc_info=True)
-                            await event.reply("❌ Maaf, terjadi kesalahan saat mengirim video. Silakan coba lagi nanti.")
-                            return
-                    else:
-                        logger.warning(f"Video with random_id {video_id} not found in database")
+                sent = await send_video_to_user(client, event, video_id)
+                if sent:
+                    return
             else:
                 logger.info("No video ID parameter provided")
             
@@ -94,7 +101,7 @@ async def setup_user_handlers(client):
             logger.error(f"[ERROR] Error in start_handler: {str(e)}", exc_info=True)
             await event.reply("❌ Terjadi kesalahan. Silakan coba lagi nanti.")
 
-    @client.on(events.CallbackQuery(data=b'subscribed'))
+    @client.on(events.CallbackQuery(pattern=b'^subscribed'))
     async def handle_subscription_callback(event):
         """
         Handle callback saat user klik button 'Sudah Subscribe'
@@ -112,6 +119,15 @@ async def setup_user_handlers(client):
             if validation_result['all_subscribed']:
                 logger.info("[SUCCESS] All subscriptions validated successfully")
                 await event.answer("✅ Terima kasih! Sekarang kamu bisa melanjutkan.", alert=True)
+                
+                # Parse video_id from callback data if exists
+                data = event.data.decode('utf-8')
+                video_id = data.split(':', 1)[1] if ':' in data else None
+                
+                if video_id:
+                    sent = await send_video_to_user(client, event, video_id, is_callback=True)
+                    if sent:
+                        return
                 
                 # Edit message untuk menunjukkan verifikasi berhasil
                 try:

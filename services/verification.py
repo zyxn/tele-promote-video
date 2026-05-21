@@ -102,7 +102,7 @@ async def validate_all_subscriptions(client: TelegramClient, user_id: int) -> di
     
     return result
 
-async def send_subscription_request(event, missing_channels: List[str]):
+async def send_subscription_request(event, missing_channels: List[str], video_id: str = None):
     """
     Kirim pesan dengan button untuk subscribe
     Adapted to match your code style
@@ -110,7 +110,7 @@ async def send_subscription_request(event, missing_channels: List[str]):
     if not missing_channels:
         return
         
-    buttons = create_subscribe_buttons(missing_channels)
+    buttons = create_subscribe_buttons(missing_channels, video_id)
     
     message = "⚠️ **Untuk melanjutkan, silakan subscribe channel berikut:**\n\n"
     
