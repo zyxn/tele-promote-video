@@ -5,19 +5,22 @@ from services.scheduler import setup_scheduler
 import logging
 import sys
 
+# Set stdout encoding to UTF-8 BEFORE logging setup
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+
 # Configure logging with UTF-8 encoding for Windows
+stream_handler = logging.StreamHandler(sys.stdout)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('bot.log', encoding='utf-8'),
-        logging.StreamHandler(sys.stdout)
+        stream_handler
     ]
 )
-
-# Set stdout encoding to UTF-8 for Windows console
-if sys.platform == 'win32':
-    sys.stdout.reconfigure(encoding='utf-8')
 
 logger = logging.getLogger(__name__)
 

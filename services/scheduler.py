@@ -59,29 +59,27 @@ async def post_video_to_public(client=None):
             try:
                 logger.info(f"Sending to public channel: {config.CHANNELS['PUBLIC']}")
                 # Kirim file dari path lokal
-                await client.send_file(
+                sent_msg = await client.send_file(
                     entity=config.CHANNELS['PUBLIC'],
                     file=image_path,
                     caption=caption
                 )
                 logger.info("[SUCCESS] Image sent successfully!")
                 
-                # Forward VIP content to group chat
-                if video.is_vip and config.VIP_GROUP_CHAT:
-                    try:
-                        logger.info(f"[VIP] Forwarding VIP content to group chat: {config.VIP_GROUP_CHAT}")
-                        await client.forward_messages(
-                            entity=config.VIP_GROUP_CHAT,
-                            messages=video.message_id,
-                            from_peer=config.CHANNELS['PRIVATE'],
-                            drop_author=True
-                        )
-                        logger.info(f"[VIP SUCCESS] VIP content forwarded to group chat!")
-                    except Exception as vip_err:
-                        logger.error(f"[VIP ERROR] Failed to forward VIP to group chat: {str(vip_err)}", exc_info=True)
-                
                 crud.mark_video_posted(session, video.id)
                 logger.info(f"[SUCCESS] Video marked as posted: {video.title}")
+                
+                # Send VIP posts to group chat (can't forward due to content protection)
+                if video.is_vip and config.VIP_GROUP_CHAT:
+                    try:
+                        await client.send_file(
+                            entity=config.VIP_GROUP_CHAT,
+                            file=image_path,
+                            caption=caption
+                        )
+                        logger.info(f"[SUCCESS] VIP post sent to group chat: {config.VIP_GROUP_CHAT}")
+                    except Exception as fwd_err:
+                        logger.error(f"[ERROR] Failed to forward VIP post to group chat: {str(fwd_err)}", exc_info=True)
                 
                 # Schedule next post immediately if there are more videos
                 schedule_next_post()

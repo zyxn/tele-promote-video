@@ -1,5 +1,7 @@
 from telethon import events
 from telethon.tl.custom import Button
+from telethon.tl.functions.messages import SendMessageRequest, SendMediaRequest
+from telethon.tl.types import InputPeerUser
 from database import crud
 from services import verification
 from utils.helpers import create_video_caption
@@ -17,30 +19,47 @@ async def send_video_to_user(client, event, video_id, is_callback=False):
         if video:
             logger.info(f"Video details - ID: {video.id}, Title: {video.title}, Message ID: {video.message_id}")
             
-            logger.info(f"Attempting to forward message {video.message_id} from channel {config.CHANNELS['PRIVATE']}")
+            logger.info(f"Attempting to send message {video.message_id} from channel {config.CHANNELS['PRIVATE']} with noforwards=True")
             try:
-                forwarded = await client.forward_messages(
-                    entity=event.sender_id,
-                    messages=video.message_id,
-                    from_peer=config.CHANNELS['PRIVATE'],
-                    drop_author=True,
+                # Get the original message from private channel
+                original_msg = await client.get_messages(config.CHANNELS['PRIVATE'], ids=video.message_id)
+                if not original_msg or not original_msg.media:
+                    logger.error(f"Original message {video.message_id} not found or has no media")
+                    if is_callback:
+                        await event.edit("❌ Maaf, video tidak ditemukan di channel. Hubungi admin.")
+                    else:
+                        await event.reply("❌ Maaf, video tidak ditemukan di channel. Hubungi admin.")
+                    return True
+                
+                # Send using raw API with noforwards flag (100% enforced)
+                peer = await client.get_input_entity(event.sender_id)
+                input_media = __import__('telethon').utils.get_input_media(original_msg.media)
+                sent = await client(SendMediaRequest(
+                    peer=peer,
+                    media=input_media,
+                    message='',
+                    random_id=__import__('random').randrange(-2**63, 2**63),
                     noforwards=True
-                )
-                logger.info(f"[SUCCESS] Video forwarded successfully! Message ID: {forwarded.id if forwarded else 'None'}")
+                ))
+                logger.info(f"[SUCCESS] Video sent with noforwards=True!")
                 
-                crud.increment_click_count(session, video_id)
-                logger.info(f"Click count incremented for video {video_id}")
-                
-                user = await event.get_sender()
-                crud.record_user_click(
-                    session=session,
-                    user_id=event.sender_id,
-                    username=user.username,
-                    first_name=user.first_name,
-                    last_name=user.last_name,
-                    video_random_id=video_id
-                )
-                logger.info(f"User click recorded for user {event.sender_id} ({user.first_name})")
+                # Post-send operations (don't let these failures send error to user)
+                try:
+                    crud.increment_click_count(session, video_id)
+                    logger.info(f"Click count incremented for video {video_id}")
+                    
+                    user = await event.get_sender()
+                    crud.record_user_click(
+                        session=session,
+                        user_id=event.sender_id,
+                        username=user.username,
+                        first_name=user.first_name,
+                        last_name=user.last_name,
+                        video_random_id=video_id
+                    )
+                    logger.info(f"User click recorded for user {event.sender_id} ({user.first_name})")
+                except Exception as post_err:
+                    logger.error(f"[WARN] Post-send operation failed (video was sent OK): {post_err}", exc_info=True)
                 
                 if is_callback:
                     await event.delete()

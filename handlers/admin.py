@@ -11,15 +11,7 @@ from telethon.tl.types import DocumentAttributeVideo
 import secrets
 import string
 from services.scheduler import schedule_next_post
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('admin_handlers.log'),
-        logging.StreamHandler()
-    ]
-)
+
 logger = logging.getLogger(__name__)
 
 
