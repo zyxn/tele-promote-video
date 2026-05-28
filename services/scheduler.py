@@ -66,6 +66,20 @@ async def post_video_to_public(client=None):
                 )
                 logger.info("[SUCCESS] Image sent successfully!")
                 
+                # Forward VIP content to group chat
+                if video.is_vip and config.VIP_GROUP_CHAT:
+                    try:
+                        logger.info(f"[VIP] Forwarding VIP content to group chat: {config.VIP_GROUP_CHAT}")
+                        await client.forward_messages(
+                            entity=config.VIP_GROUP_CHAT,
+                            messages=video.message_id,
+                            from_peer=config.CHANNELS['PRIVATE'],
+                            drop_author=True
+                        )
+                        logger.info(f"[VIP SUCCESS] VIP content forwarded to group chat!")
+                    except Exception as vip_err:
+                        logger.error(f"[VIP ERROR] Failed to forward VIP to group chat: {str(vip_err)}", exc_info=True)
+                
                 crud.mark_video_posted(session, video.id)
                 logger.info(f"[SUCCESS] Video marked as posted: {video.title}")
                 

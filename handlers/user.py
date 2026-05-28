@@ -23,7 +23,8 @@ async def send_video_to_user(client, event, video_id, is_callback=False):
                     entity=event.sender_id,
                     messages=video.message_id,
                     from_peer=config.CHANNELS['PRIVATE'],
-                    drop_author=True
+                    drop_author=True,
+                    noforwards=True
                 )
                 logger.info(f"[SUCCESS] Video forwarded successfully! Message ID: {forwarded.id if forwarded else 'None'}")
                 

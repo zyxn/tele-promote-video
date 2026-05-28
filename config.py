@@ -40,6 +40,9 @@ if os.getenv('CHANNEL_CH4'):
 # Database
 DATABASE_URL = os.getenv('DATABASE_URL')
 
+# VIP Group Chat - Forward VIP content here
+VIP_GROUP_CHAT = os.getenv('VIP_GROUP_CHAT')
+
 # Paths
 BASE_DIR = Path(__file__).parent
 
